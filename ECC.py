@@ -14,21 +14,21 @@ class ECPoint:
         if self.x == other.x and self.y == other.y:
             return self.double()
         if self.x == other.x:
-            return ECPoint(None, None)
-        m = (self.y - other.y) / (self.x - other.x)
+            return ECPoint(None, None, self.space)
+        m = ((self.y - other.y) * pow((self.x - other.x),-1,self.space.p)) % self.space.p
         x = (m**2 - self.x - other.x) % self.space.p
         y = (m * (self.x - x) - self.y) % self.space.p
         return ECPoint(x, y, self.space)
     
     def double(self):
-        m = (3 * self.x**2 + self.a) / (2 * self.y)
+        m = ((3 * self.x**2 + self.space.a) * pow(2 * self.y, -1, self.space.p)) % self.space.p
         x = (m**2 - 2 * self.x) % self.space.p
         y = (m * (self.x - x) - self.y) % self.space.p
         return ECPoint(x, y, self.space)
     
     def __mul__(self, n):
         if n == 0:
-            return ECPoint(None, None)
+            return ECPoint(None, None, self.space)
         if n == 1:
             return self
         if n % 2 == 0:
@@ -98,9 +98,11 @@ def ecdsa_sign(message, key):
     ECDSA Sign
     """
 
-    rnd = random.randint(1, key.space.n - 1)
-    r = (key.generator * rnd).x % key.order
-    s = pow(rnd,-1,key.order) * (message + key.priv_key * r) % key.order
+    r,s=0,0
+    while r == 0 or s == 0:
+        rnd = random.randint(1, key.order - 1)
+        r = (key.generator * rnd).x % key.order
+        s = pow(rnd,-1,key.order) * (message + key.priv_key * r) % key.order
     return (r, s)
 
 def ecdsa_verify(message, signature, key):
@@ -123,7 +125,13 @@ if __name__ == "__main__":
     a = 2
     b = 7
     space = ECSpace(p, a, b)
-    G = ECPoint(2, 22, space)
+    x, G = 3, None
+    print("Finding a generator...")
+    for y in range(1, p):
+        if space.is_valid(ECPoint(x, y, space)):
+            print("Generator found!")
+            G = ECPoint(x,y, space)
+            break
 
     # ===ALICE===
     AKey = ECKey(space, G).generate()
