@@ -1,4 +1,4 @@
-import random
+import secrets
 
 class ECPoint:
     """
@@ -87,8 +87,10 @@ class ECKey:
     def generate(self):
         if self.priv_key is not None:
             return
-        self.priv_key = random.randint(1, self.order - 1)
-        self.pub_key = self.generator * self.priv_key
+        self.pub_key = ECPoint(None, None, self.space)
+        while self.pub_key.x is None:
+            self.priv_key = secrets.randbelow(self.order)
+            self.pub_key = self.generator * self.priv_key
         return self
 
 
@@ -99,17 +101,24 @@ def ecdsa_sign(message, key):
     """
 
     r,s=0,0
-    while r == 0 or s == 0:
-        rnd = random.randint(1, key.order - 1)
-        r = (key.generator * rnd).x % key.order
-        s = pow(rnd,-1,key.order) * (message + key.priv_key * r) % key.order
+    while True:
+        rnd = secrets.randbelow(key.order)
+
+        r = (key.generator * rnd).x 
+        if not r: continue # r cannot be None
+        r = r % key.order
+        if not r: continue # r cannot be 0
+        s = (pow(rnd,-1,key.order) * (message + key.priv_key * r)) % key.order
+        if not s: continue # s cannot be 0
+        break
     return (r, s)
 
 def ecdsa_verify(message, signature, key):
     """
     ECDSA Verify
     """
-
+    if not key.space.is_valid(key.pub_key):
+        return False
     r, s = signature
     if r < 1 or r > key.order - 1 or s < 1 or s > key.order - 1:
         return False
@@ -117,27 +126,4 @@ def ecdsa_verify(message, signature, key):
     u1 = message * w % key.order
     u2 = r * w % key.order
     p = key.generator * u1 + key.pub_key * u2
-    return r == p.x
-
-
-if __name__ == "__main__":
-    p = 37
-    a = 2
-    b = 7
-    space = ECSpace(p, a, b)
-    x, G = 3, None
-    print("Finding a generator...")
-    for y in range(1, p):
-        if space.is_valid(ECPoint(x, y, space)):
-            print("Generator found!")
-            G = ECPoint(x,y, space)
-            break
-
-    # ===ALICE===
-    AKey = ECKey(space, G).generate()
-    message = 12
-    signature = ecdsa_sign(message, AKey)
-
-    # ===BOB===
-    Akey = ECKey(space, G, pub_key=AKey.pub_key)
-    print(ecdsa_verify(message, signature, Akey))
+    return r == p.x % key.order
