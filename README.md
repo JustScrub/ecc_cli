@@ -3,6 +3,10 @@ An educational project to understand Elliptic Curve Cryptography on modulo field
 
 Implements operations on elliptic curves and some cryptographic algorithms based on ECC.
 
+DONE:
+- EC Math
+- Algorithms: ECDSA, ECDH, "ECIES"
+
 TODO:
- - EC Math
- - Algorithms: ECDSA, ECDH, ...
+ - ECDSA in CLI
+ - more benchmarks?

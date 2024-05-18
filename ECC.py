@@ -174,8 +174,8 @@ class ECDH:
         self.key = ECKey(self.space, self.generator).generate()
         return self.key
     
-    def shared_secret(self, key):
-        return key.pub_key * self.key.priv_key
+    def shared_secret(self, pkey):
+        return pkey * self.key.priv_key
 
 if __name__ == "__main__":
     p = 37

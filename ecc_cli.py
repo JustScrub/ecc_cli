@@ -86,7 +86,7 @@ class ECCCLI(Cmd):
         print(f"Public key to send: {ser}")
 
         ser = input("Enter the other party's public key: ")
-        key = ECC.ECKey.deserialize(ser, self.space)
+        key = ECC.ECPoint.deserialize(ser, self.space)
         shared = ecdh.shared_secret(key)
         return shared
     
@@ -107,11 +107,15 @@ class ECCCLI(Cmd):
             self.perror("PyCryptodome is not available.")
             return
 
-        cli = ECCCLI_AES(self.ecdh_get_shared().serialize().encode())
+        key = self.ecdh_get_shared()
+        shift = max(32 - key.x.bit_length(),0)
+        key = ((key.x << shift) ^ key.y).to_bytes((key._nbits+7)//8, 'big')[-32:]
+        cli = ECCCLI_AES(key)
         cli.cmdloop()
         
-def clear_console():
+def clear_console() -> None:
     print("\033[H\033[J")
+    return None
 
 class ECCCLI_AES(Cmd):
 
@@ -184,4 +188,7 @@ class ECCCLI_AES(Cmd):
         except ValueError:
             self.perror("Decryption verification failed! The message may have been tampered with.")
 
-    
+if __name__ == "__main__":
+    sp, gen = ECC.load_space('secp256k1')
+    cli = ECCCLI(sp, gen)
+    cli.cmdloop()
