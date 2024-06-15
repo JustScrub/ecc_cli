@@ -1,5 +1,5 @@
 import ECC
-from cmd2 import Cmd
+from cmd2 import Cmd, Cmd2ArgumentParser, with_argparser
 import sys
 
 if '--ecc-py-only' not in sys.argv:
@@ -117,6 +117,21 @@ def clear_console() -> None:
     print("\033[H\033[J")
     return None
 
+# ---------------------------- AES CLI ----------------------------
+encryptArgparser = Cmd2ArgumentParser()
+encryptArgparser.add_argument('message', help='The message to encrypt.')
+encryptArgparser.add_argument("-f", "--file", help="Encrypt the contents of a file instead of a message.")
+encryptArgparser.add_argument("-o", "--output", help="Output the encrypted message to a file instead of the console.")
+
+decryptArgparser = Cmd2ArgumentParser()
+decryptArgparser.add_argument('message', help='The message to decrypt.')
+decryptArgparser.add_argument("-f", "--file", help="Decrypt the contents of a file instead of a message.")
+decryptArgparser.add_argument("-o", "--output", help="Output the decrypted message to a file instead of the console.")
+
+chatArgparser = Cmd2ArgumentParser()
+chatArgparser.add_argument('ip', help='The IP address of the other party.')
+chatArgparser.add_argument('port', help='The port of the other party.', type=int, default=0xAE5)
+
 class ECCCLI_AES(Cmd):
 
     def __init__(self, key=None):
@@ -154,39 +169,87 @@ class ECCCLI_AES(Cmd):
         
         self.perror("Mode setting not yet implemented.")
 
+    @with_argparser(encryptArgparser)
     def do_encrypt(self, arg):
         """
         Encrypt a message.
-        Usage: `encrypt message`
+        Usage: `encrypt message [-o output]` or `encrypt -f file [-o output]`
         """
-        if not arg:
-            self.perror("No message specified.")
-            return
+
+        if arg.file is not None:
+            try:
+                with open(arg.file, 'r') as f:
+                    msg = f.read()
+            except FileNotFoundError:
+                self.perror("File not found.")
+                return
+        else:
+            msg = arg.message
 
         cipher = AES.new(self.key, AES.MODE_EAX, mac_len=self.tag_length)
-        ciphertext, tag = cipher.encrypt_and_digest(arg.encode())
-        nonce = cipher.nonce
         # 16 bytes nonce, 16 bytes tag, then the ciphertext
+        ciphertext, tag = cipher.encrypt_and_digest(msg.encode())
+        nonce = cipher.nonce
+
+        if arg.output is not None:
+            try:
+                with open(arg.output, 'wb') as f:
+                    f.write(nonce + tag + ciphertext)
+            except FileNotFoundError as e:
+                self.perror("Output file could not be opened: " + str(e))
+                return
+            print(f"Encrypted message written to {arg.output}")
+            return
+
         print("Encrypted message:")
         print(b64encode(nonce + tag + ciphertext).decode())
 
+    @with_argparser(decryptArgparser)
     def do_decrypt(self, arg):
         """
         Decrypt a message.
-        Usage: `decrypt message`
+        Usage: `decrypt message [-o output]` or `decrypt -f file [-o output]`
         """
-        if not arg:
-            self.perror("No message specified.")
-            return
 
-        decoded = b64decode(arg)
+        if arg.file is not None:
+            try:
+                with open(arg.file, 'rb') as f:
+                    decoded = f.read()
+            except FileNotFoundError:
+                self.perror("File not found.")
+                return
+        else:
+            decoded = b64decode(arg.message)
+
         nonce, tag, ciphertext = decoded[:16], decoded[16:32], decoded[32:]
         cipher = AES.new(self.key, AES.MODE_EAX, mac_len=self.tag_length, nonce=nonce)
         try:
             plaintext = cipher.decrypt_and_verify(ciphertext, tag)
-            print(f"Decrypted message: {plaintext.decode()}")
         except ValueError:
             self.perror("Decryption verification failed! The message may have been tampered with.")
+            return
+        
+        if arg.output is not None:
+            try:
+                with open(arg.output, 'wb') as f:
+                    f.write(plaintext)
+            except FileNotFoundError as e:
+                self.perror("Output file could not be opened: " + str(e))
+                return
+            print(f"Decrypted message written to {arg.output}")
+            return
+        else:
+            print(plaintext.decode())
+
+    @with_argparser(chatArgparser)
+    def do_chat(self, arg):
+        """
+        Start a chat session.
+        Usage: `chat ip [port=0xAE5]`
+        Quit the chat session with Ctrl+C.
+        """
+        self.perror("Chat mode not yet implemented.")
+        
 
 if __name__ == "__main__":
     sp, gen = ECC.load_space('secp256k1')
