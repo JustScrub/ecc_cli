@@ -7,8 +7,8 @@ class ECPoint:
     """
 
     def __init__(self, x, y, space):
-        self.x = x
-        self.y = y
+        self.x = x % space.p if x is not None else None
+        self.y = y % space.p if y is not None else None
         self.space = space
         self._ord = None
         self._nbits = space.p.bit_length()
@@ -66,6 +66,39 @@ class ECPoint:
         y = int.from_bytes(b[len(b)//2:], 'big')
         return ECPoint(x, y, space)
 
+def tonelli_shanks(n, p):
+    if pow(n, (p - 1) >> 1, p) != 1:
+        return None
+    
+    # 1. factor p-1 on the form q * 2^s (with Q odd)
+    Q, S = p - 1, 0
+    while Q & 1 == 0:
+        Q >>= 1
+        S += 1
+    if S == 1:
+        return pow(n, (p + 1) >> 2, p)
+    
+    # 2. find a z which is a quadratic non-residue modulo p
+    z = 2
+    while pow(z, (p - 1) >> 1, p) != p - 1:
+        z += 1
+
+    # 3. initialize variables
+    M, c, t, R = S, pow(z, Q, p), pow(n, Q, p), pow(n, (Q + 1) >> 1, p)
+
+    # 4. loop
+    while True:
+        if t == 0:
+            return 0
+        if t == 1:
+            return R
+        i, t2 = 1, (t * t) % p
+        while t2 != 1:
+            i += 1
+            t2 = (t2 * t2) % p
+        b = pow(c, 1 << (M - i - 1), p)
+        M, c, t, R = i, (b * b) % p, (t * b * b) % p, (R * b) % p
+
 
 class ECSpace:
     """
@@ -85,6 +118,33 @@ class ECSpace:
     
     def is_singular(self):
         return (4 * self.a**3 + 27 * self.b**2) % self.p == 0
+
+    def find_y(self, x, sgn=0):
+        y = tonelli_shanks((x**3 + self.a * x + self.b) % self.p, self.p)
+        if y is None:
+            return None
+        return y if sgn == 0 else self.p - y
+    
+    def find_x(self, y, niters=1000, srange=None):
+        """
+        Attempt to find x given y
+        y: y-coordinate
+        niters: Number of iterations of Newton's method, default 1000
+        srange: Search range [x-srange, x+srange], x if found by newton's method; default [0, p]
+        """
+        y2 = y*y % self.p
+        x = 1
+        for _ in range(niters):
+            x = x - ((x**3 + self.a * x + self.b - y2) // (3*x**2 + self.a))
+            x %= self.p
+        
+        srange = srange if srange is not None else self.p//2
+        for i in range(srange + 1):
+            if self.is_valid(ECPoint(x+i, y, self)):
+                return x+i
+            if self.is_valid(ECPoint(x-i, y, self)):
+                return x-i
+        return None
 
 class ECKey:
     """
@@ -178,6 +238,16 @@ class ECDH:
         return pkey * self.key.priv_key
 
 if __name__ == "__main__":
+    cv,g = load_space('secp256k1')
+    x = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
+    y = cv.find_y(x)
+    assert y is not None
+    P = ECPoint(x, y, cv)
+    print(P.x, P.y)
+    print(cv.find_x(P.y, 10000000))
+    exit()
+
+
     p = 37
     a = 2
     b = 7
