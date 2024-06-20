@@ -121,9 +121,7 @@ class ECSpace:
 
     def find_y(self, x, sgn=0):
         y = tonelli_shanks((x**3 + self.a * x + self.b) % self.p, self.p)
-        if y is None:
-            return None
-        return y if sgn == 0 else self.p - y
+        return None if y is None else (y, self.p - y)[not sgn]
     
     def find_x(self, y, niters=1000, srange=None):
         """
@@ -132,19 +130,23 @@ class ECSpace:
         niters: Number of iterations of Newton's method, default 1000
         srange: Search range [x-srange, x+srange], x if found by newton's method; default [0, p]
         """
-        y2 = y*y % self.p
-        x = 1
-        for _ in range(niters):
-            x = x - ((x**3 + self.a * x + self.b - y2) // (3*x**2 + self.a))
-            x %= self.p
+        x = ECnewton(self, y, niters)
         
         srange = srange if srange is not None else self.p//2
         for i in range(srange + 1):
             if self.is_valid(ECPoint(x+i, y, self)):
-                return x+i
+                return (x+i) % self.p
             if self.is_valid(ECPoint(x-i, y, self)):
-                return x-i
+                return (x-i) % self.p
         return None
+
+def ECnewton(cv, y, iters=10):
+    y2 = y*y % cv.p
+    x = 1
+    for _ in range(iters):
+        x = x - ( (x**3 + cv.a * x + cv.b - y2) // (3*x**2 + cv.a) )
+        x %= cv.p
+    return x
 
 class ECKey:
     """
@@ -203,13 +205,13 @@ class ECDSA:
             if not r: continue # r cannot be None
             r = r % self.key.order
             if not r: continue # r cannot be 0
-            s = (pow(rnd,-1,self.key.order) * (message + self.key.priv_self.key * r)) % self.key.order
+            s = (pow(rnd,-1,self.key.order) * (message + self.key.priv_key * r)) % self.key.order
             if not s: continue # s cannot be 0
             break
         return (r, s)
 
     def verify(self, message, signature):
-        if not self.key.space.is_valid(self.key.pub_self.key):
+        if not self.key.space.is_valid(self.key.pub_key):
             return False
         r, s = signature
         if r < 1 or r > self.key.order - 1 or s < 1 or s > self.key.order - 1:
@@ -217,7 +219,7 @@ class ECDSA:
         w = pow(s,-1,self.key.order)
         u1 = message * w % self.key.order
         u2 = r * w % self.key.order
-        p = self.key.generator * u1 + self.key.pub_self.key * u2
+        p = self.key.generator * u1 + self.key.pub_key * u2
         return r == p.x % self.key.order
 
 class ECDH:
@@ -238,13 +240,13 @@ class ECDH:
         return pkey * self.key.priv_key
 
 if __name__ == "__main__":
-    cv,g = load_space('secp256k1')
-    x = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
-    y = cv.find_y(x)
-    assert y is not None
-    P = ECPoint(x, y, cv)
-    print(P.x, P.y)
-    print(cv.find_x(P.y, 10000000))
+    cv = ECSpace(157,3,7)
+    y = 128
+    x = ECnewton(cv, y)
+    print(x)
+    x = cv.find_x(y)
+    print(x)
+    print(cv.is_valid(ECPoint(x, y, cv)))
     exit()
 
 
