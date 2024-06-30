@@ -14,30 +14,46 @@ class ECPoint:
         self._nbits = space.p.bit_length()
 
     def __add__(self, other):
-        if self.x == other.x and self.y == other.y:
-            return self.double()
+        if self.x is None:
+            return other
+        if other.x is None:
+            return self
         if self.x == other.x:
+            if self.y == other.y:
+                return self.double()
             return ECPoint(None, None, self.space)
+        
         m = ((self.y - other.y) * pow((self.x - other.x),-1,self.space.p)) % self.space.p
         x = (m**2 - self.x - other.x) % self.space.p
         y = (m * (self.x - x) - self.y) % self.space.p
         return ECPoint(x, y, self.space)
     
     def double(self):
+        if self.x is None or self.y == 0:
+            return ECPoint(None, None, self.space)
+        
         m = ((3 * self.x**2 + self.space.a) * pow(2 * self.y, -1, self.space.p)) % self.space.p
         x = (m**2 - 2 * self.x) % self.space.p
         y = (m * (self.x - x) - self.y) % self.space.p
         return ECPoint(x, y, self.space)
     
     def __mul__(self, n):
-        if n == 0:
+        # montgomery ladder
+        if not n:
             return ECPoint(None, None, self.space)
-        if n == 1:
+        if n == 1 or self.x is None:
             return self
-        if n % 2 == 0:
-            return (self.double() * (n // 2))
-        return (self.double() * (n // 2)) + self
-    
+        
+        p1, p2 = self, self.double()
+        i = 1 << (n.bit_length() - 2)
+        while i:
+            if n & i:
+                p1, p2 = p2 + p1, p2.double()
+            else:
+                p1, p2 = p1.double(), p1 + p2
+            i >>= 1
+        return p1
+        
     def __neg__(self):
         return ECPoint(self.x,
                         (self.space.p-self.y) % self.space.p, 
@@ -240,27 +256,15 @@ class ECDH:
         return pkey * self.key.priv_key
 
 if __name__ == "__main__":
-    cv = ECSpace(157,3,7)
-    y = 128
-    x = ECnewton(cv, y)
-    print(x)
-    x = cv.find_x(y)
-    print(x)
-    print(cv.is_valid(ECPoint(x, y, cv)))
-    exit()
-
 
     p = 37
     a = 2
     b = 7
     space = ECSpace(p, a, b)
-    x, G = 3, None
-    print("Finding a generator...")
-    for y in range(1, p):
-        if space.is_valid(ECPoint(x, y, space)):
-            print("Generator found!")
-            G = ECPoint(x,y, space)
-            break
+    x = 3
+    G = ECPoint(x, space.find_y(x), space)
+    
+    # ECDSA test
 
     # ===ALICE===
     AKey = ECKey(space, G).generate()
@@ -269,4 +273,31 @@ if __name__ == "__main__":
 
     # ===BOB===
     Akey = ECKey(space, G, pub_key=AKey.pub_key)
-    ECDSA(Akey).verify(message, signature)
+    assert ECDSA(Akey).verify(message, signature)
+
+    # Montgomery Ladder test
+    for _ in range(1000):
+        y = None
+        while y is None:
+            x = secrets.randbelow(p)
+            y = space.find_y(x)
+
+        k = secrets.randbelow(p)
+        G = ECPoint(x, y, space)
+        P = ECPoint(None, None, space)
+        P = sum([G]*k, P)
+        G = G * k
+        print(P.x, P.y)
+        print(G.x, G.y)
+
+        assert P.x == G.x and P.y == G.y
+        print("----")
+
+    # find x test
+    cv = ECSpace(157,3,7)
+    y = 128
+    x = ECnewton(cv, y)
+    print(x)
+    x = cv.find_x(y)
+    print(x)
+    print(cv.is_valid(ECPoint(x, y, cv)))
