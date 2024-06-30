@@ -27,10 +27,21 @@ def data_to_csv(data):
     
 
 if __name__ == "__main__":
+
+    if len(sys.argv) < 2:
+        print("Usage: python bench.py <n_reps> [-c=csv_file] [-l=latex_file]")
+        sys.exit(1)
+
+    try:
+        reps = int(sys.argv[1])
+    except ValueError:
+        print("Invalid number of repetitions.")
+        sys.exit(1)
+
     benches = i.getmembers(time_benchmarks, i.isfunction)
     res = ""
     for name, func in benches:
-        res += func(reps=100_000)
+        res += func(reps=reps)
 
     res2 = {}
     ind = ["ecpy","ecc"]
@@ -40,11 +51,11 @@ if __name__ == "__main__":
             res2[bench] = ['','']
         res2[bench][ind.index(lib)] = float(t)
 
-    if len(sys.argv) == 1:
+    if len(sys.argv) == 2:
         print(data_to_csv(res2))
 
-    csv_files = [f for f in sys.argv[1:] if f.startswith('-c=')]
-    latex_files = [f for f in sys.argv[1:] if f.startswith('-l=')]
+    csv_files = [f for f in sys.argv[2:] if f.startswith('-c=')]
+    latex_files = [f for f in sys.argv[2:] if f.startswith('-l=')]
     for f in csv_files:
         with open(f[3:], 'w') as file:
             file.write(data_to_csv(res2))
