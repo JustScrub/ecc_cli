@@ -40,8 +40,15 @@ if __name__ == "__main__":
             res2[bench] = ['','']
         res2[bench][ind.index(lib)] = float(t)
 
-    if len(sys.argv) > 1 and sys.argv[1] == "csv":
+    if len(sys.argv) == 1:
         print(data_to_csv(res2))
 
-    print(data_to_latex_table(res2))
+    csv_files = [f for f in sys.argv[1:] if f.startswith('-c=')]
+    latex_files = [f for f in sys.argv[1:] if f.startswith('-l=')]
+    for f in csv_files:
+        with open(f[3:], 'w') as file:
+            file.write(data_to_csv(res2))
+    for f in latex_files:
+        with open(f[3:], 'w') as file:
+            file.write(data_to_latex_table(res2))
 
