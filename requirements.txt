@@ -1,3 +1,4 @@
 cmd2
 pycryptodome
 ecpy
+forbiddenfruit # for benchmarking
