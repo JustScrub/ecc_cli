@@ -30,6 +30,11 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print("Usage: python bench.py <n_reps> [-c=csv_file] [-l=latex_file]")
+        print("<n_reps> is the number of repetitions for each benchmark.")
+        print("Optional arguments:")
+        print("  -c=csv_file: write the results to a csv file.")
+        print("  -l=latex_file: write the results to a latex table.")
+        print("If no optional arguments are provided, the results are printed to the console.")
         sys.exit(1)
 
     try:
